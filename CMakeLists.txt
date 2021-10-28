@@ -24,3 +24,5 @@ set(LDADD_LIBS)
 
 add_executable(${PROJECT_NAME} ${SRC_LIST})
 target_link_libraries(${PROJECT_NAME} ${FREETYPE_LIBRARIES} ${LDADD_LIBS})
+
+configure_file(mk_sample.sh.cmake ${CMAKE_CURRENT_BINARY_DIR}/mk_sample.sh)
