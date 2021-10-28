@@ -35,6 +35,7 @@ Modified by Chernov A.A. <valexlin@gmail.com>
 #include "gfxfont.h" // patched Adafruit_GFX font structures
 
 #define MAX_S_LEN		512
+#define MAX_GLYPH_NAME_LEN	128
 
 // Accumulate bits for output, with periodic hexadecimal byte write
 void enbit(uint8_t value) {
@@ -105,7 +106,7 @@ int main(int argc, char *argv[]) {
   int one_char = 0;
   int ascii_mode = 0;
   int use_progmem = 0;
-  int bitmapOffset = 0;
+  unsigned int bitmapOffset = 0;
   int x, y, byte;
   int dpi = 96;
   int hinting = 0;	// 0 - no, 1 - bytecode, 2 - auto
@@ -120,7 +121,9 @@ int main(int argc, char *argv[]) {
   FT_Bitmap *bitmap;
   FT_BitmapGlyphRec *g;
   GFXglyph *table;
+  FT_UInt* table_glyphs;
   uint8_t bit;
+  char glyphName[MAX_GLYPH_NAME_LEN] = { 0 };
 
   // Unless overridden, default first and last chars are
   // ' ' (space) and '~', respectively
@@ -289,6 +292,8 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  // MONO renderer provides clean image with perfect crop
+  // (no wasted pixels) via bitmap struct.
   switch (hinting)
   {
     case 0:		// no
@@ -313,7 +318,8 @@ int main(int argc, char *argv[]) {
 
   // Allocate space for font name and glyph table
   if ((!(fontName = malloc(strlen(ptr) + 28))) ||
-      (!(table = (GFXglyph *)malloc((last - first + 1) * sizeof(GFXglyph))))) {
+      (!(table = (GFXglyph *)malloc((last - first + 1) * sizeof(GFXglyph)))) ||
+      (!(table_glyphs = (FT_UInt *)malloc((last - first + 1) * sizeof(FT_UInt))))) {
     fprintf(stderr, "Malloc error\n");
     return 1;
   }
@@ -359,7 +365,17 @@ int main(int argc, char *argv[]) {
   }
 
   // << 6 because '26dot6' fixed-point format
-  FT_Set_Char_Size(face, size << 6, 0, dpi, 0);
+  if ((err = FT_Set_Char_Size(face, size << 6, 0, dpi, 0))) {
+    fprintf(stderr, "Set font char size error: %d\n", err);
+    FT_Done_FreeType(library);
+    return err;
+  }
+
+  if ((err = FT_Select_Charmap(face, FT_ENCODING_UNICODE))) {
+    fprintf(stderr, "Select unicode charmap error: %d\n", err);
+    FT_Done_FreeType(library);
+    return err;
+  }
 
   // Print header
   printf("/*******************************************************************\n");
@@ -407,9 +423,12 @@ int main(int argc, char *argv[]) {
 
   // Process glyphs and output huge bitmap data array
   for (i = first, j = 0; i <= last; i++, j++) {
-    // MONO renderer provides clean image with perfect crop
-    // (no wasted pixels) via bitmap struct.
-    if ((err = FT_Load_Char(face, i, load_flags))) {
+    if ((table_glyphs[j] = FT_Get_Char_Index(face, i)) == 0) {
+      fprintf(stderr, "undefined character code 0x%04X\n", (unsigned int)i);
+      continue;
+    }
+
+    if ((err = FT_Load_Glyph(face, table_glyphs[j], load_flags))) {
       fprintf(stderr, "Error %d loading char '%c'\n", err, i);
       continue;
     }
@@ -475,8 +494,10 @@ int main(int argc, char *argv[]) {
            table[j].yOffset);
     if (i < last) {
       printf(",   // 0x%02X", i);
-      if (isprint(i)) {
-        printf(" '%c'", i);
+      if ((err = FT_Get_Glyph_Name(face, table_glyphs[j], glyphName, MAX_GLYPH_NAME_LEN)) == 0) {
+      //if (isprint(i)) {
+        glyphName[MAX_GLYPH_NAME_LEN - 1] = 0;
+        printf(" '%s'", glyphName);
       }
       putchar('\n');
     }
@@ -495,10 +516,11 @@ int main(int argc, char *argv[]) {
   printf("  (GFXglyph *)%s_Glyphs,\n", fontName);
   if (face->size->metrics.height == 0) {
     // No face height info, assume fixed width and get from a glyph.
-    printf("  0x%02X, 0x%02X, %d, %u };\n\n", first, last, table[0].height, bitmapOffset);
+    printf("  0x%02X, 0x%02X, // first, last\n", first, last);
+    printf("  %d, %u };\n\n", table[0].height, bitmapOffset);
   } else {
-    printf("  0x%02X, 0x%02X, %d, %u };\n\n", first, last,
-           (int)(face->size->metrics.height >> 6), bitmapOffset);
+    printf("  0x%02X, 0x%02X, // first, last\n", first, last);
+    printf("  %d, %u };\n\n", (int)(face->size->metrics.height >> 6), bitmapOffset);
   }
   printf("// Approx. %d bytes\n", bitmapOffset + (last - first + 1) * 7 + 7);
   // Size estimate is based on AVR struct and pointer sizes;
