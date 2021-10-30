@@ -35,7 +35,7 @@ Modified by Chernov A.A. <valexlin@gmail.com>
 #define MAX_S_LEN		512
 #define MAX_GLYPH_NAME_LEN	128
 #define MAX_NUMBER_STR_SZ	9
-#define MAX_RANGE_SZ	16
+#define MAX_RANGE_SZ	64
 
 // Accumulate bits for output, with periodic hexadecimal byte write
 void enbit(uint8_t value) {
