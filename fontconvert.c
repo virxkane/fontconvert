@@ -73,7 +73,7 @@ static void print_help() {
 	printf("--onechar=<code>             |-c        specify only one character\n");
 	printf("--ascii                      |-a        specify ACSII mode: one charset range: first=0x20, last=0x7E\n");
 	printf("--dpi=<dpi_value>            |-d        specify DPI\n");
-	printf("--hinting=[no|bytecode|auto] |-t        specify hinting mode\n");
+	printf("--hinting=[no|mono|auto]     |-t        specify hinting mode\n");
 	printf("--progmem[=1|0|yes|no]       |-d        use 'PROGMEM' specification for font data declarations\n");
 	printf("--help                       |-h        show this page and exit.\n");
 }
@@ -189,7 +189,7 @@ int main(int argc, char *argv[]) {
 	unsigned int bitmapOffset = 0;
 	int x, y, byte;
 	int dpi = 96;
-	int hinting = 0;	// 0 - no, 1 - bytecode, 2 - auto
+	int hinting = 1;	// 0 - no, 1 - mono, 2 - auto
 	char c, *ptr;
 	int help_only = 0;
 	char filePath[MAX_S_LEN] = { 0 };
@@ -259,7 +259,7 @@ int main(int argc, char *argv[]) {
 			case 't':
 				if (strcasecmp(optarg, "no") == 0)
 					hinting = 0;
-				else if (strcasecmp(optarg, "bytecode") == 0)
+				else if (strcasecmp(optarg, "mono") == 0)
 					hinting = 1;
 				else if (strcasecmp(optarg, "auto") == 0)
 					hinting = 2;
@@ -379,16 +379,16 @@ int main(int argc, char *argv[]) {
 	// (no wasted pixels) via bitmap struct.
 	switch (hinting) {
 		case 0:		// no
-			load_flags = FT_LOAD_NO_HINTING | FT_LOAD_NO_AUTOHINT;
+			load_flags = FT_LOAD_NO_HINTING;
 			break;
-		case 1:		// bytecode
-			load_flags = FT_LOAD_DEFAULT | FT_LOAD_TARGET_MONO;
+		case 1:		// mono
+			load_flags = FT_LOAD_TARGET_MONO;
 			break;
 		case 2:		// auto
-			load_flags = FT_LOAD_FORCE_AUTOHINT | FT_LOAD_TARGET_MONO;
+			load_flags = FT_LOAD_TARGET_MONO | FT_LOAD_FORCE_AUTOHINT;
 			break;
-		default:	// no
-			load_flags = FT_LOAD_NO_HINTING | FT_LOAD_NO_AUTOHINT;
+		default:	// mono
+			load_flags = FT_LOAD_TARGET_MONO;
 			break;
 	}
 
@@ -483,13 +483,13 @@ int main(int argc, char *argv[]) {
 			printf("no");
 			break;
 		case 1:
-			printf("bytecode");
+			printf("mono");
 			break;
 		case 2:
 			printf("auto");
 			break;
 		default:
-			printf("no");
+			printf("mono");
 			break;
 	}
 	printf("\n");
